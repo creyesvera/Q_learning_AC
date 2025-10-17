@@ -1,7 +1,11 @@
-# -*- coding: utf-8 -*-
-import numpy as np
 import random
 from itertools import product
+import time
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+from typing import Dict, Tuple
+
 
 ACTIONS = {
     0: "Prender ventilación",
@@ -10,7 +14,7 @@ ACTIONS = {
     3: "Subir temperatura",
     4: "Apagar ventilación"
 }
-n_actions = len(ACTIONS)
+
 
 
 class ThermalEnv:
@@ -125,16 +129,16 @@ class ThermalEnv:
             # For this example, let's assume the reward is based on the next_state and action
             # A more complex table could be used if needed.
             try:
-                 # Example: If reward_table is a dict mapping (next_state, action) to reward
-                 return self.reward_table.get((next_state, action), 0) # Default to 0 if not in table
+                # Example: If reward_table is a dict mapping (next_state, action) to reward
+                return self.reward_table.get((next_state, action), 0) # Default to 0 if not in table
             except TypeError:
                 # Handle cases where reward might only depend on next_state if table structure is different
                 try:
                     return self.reward_table.get(next_state, 0)
                 except:
-                     # Fallback or error handling if the table structure is unexpected
-                     print("Warning: Could not retrieve reward from provided table. Using default.")
-                     pass # Fallback to simplified reward if table lookup fails
+                    # Fallback or error handling if the table structure is unexpected
+                    print("Warning: Could not retrieve reward from provided table. Using default.")
+                    pass # Fallback to simplified reward if table lookup fails
 
 
         # Simplified reward function based on thermal opinion (used if reward_table is None or lookup fails)
@@ -159,32 +163,32 @@ class ThermalEnv:
         # encendido, manternerse encendido o bajar la temperatura
         if schedule == 1 and temp_int == 2:
             if (ac_status == 1 and action in [1, 2]) or (ac_status == 0 and action == 0):
-              if temp_ext == 2:
+                if temp_ext == 2:
                 #print("Regla 2, reward: 2")
-                return 1
-              #print("Regla 2, reward: 1")
-              return 1
+                    return 1
+                #print("Regla 2, reward: 1")
+            return 1
 
         # ✅ Regla 3: Está muy caliente, temperatura alta  → El aire debe estar
         # encendido, manternerse encendido o bajar la temperatura
         if opinion == 2 and temp_int == 2:
-          if (ac_status == 1 and action in [1, 2]) or (ac_status == 0 and action == 0):
-              if temp_ext == 2:
+            if (ac_status == 1 and action in [1, 2]) or (ac_status == 0 and action == 0):
+                if temp_ext == 2:
                 #print("Regla 3 reward: 2")
-                return 1
-              #print("Regla 3, reward: 1")
-              return 1
+                    return 1
+            #print("Regla 3, reward: 1")
+            return 1
 
 
         # ✅ Regla 4: Está muy frío, temperatura baja  → El aire debe estar
         # apagado, manternerse apagado o subir la temperatura
         if opinion == 0 and temp_int == 0:
             if (ac_status == 1 and  action in [3, 4]) or (ac_status == 0 and action == 2):
-              if temp_ext == 0:
+                if temp_ext == 0:
                 #print("Regla 4, reward: 2")
-                return 1
-              #print("Regla 4, reward: 1")
-              return 1
+                    return 1
+            #print("Regla 4, reward: 1")
+            return 1
 
 
         # ✅ Regla 5: Opinión térmica es cómoda
@@ -206,3 +210,96 @@ class ThermalEnv:
 
     def get_all_actions(self):
         return list(ACTIONS.keys())
+    
+    
+
+
+from copy import deepcopy
+from collections import defaultdict
+import statistics
+
+estado_visitas = defaultdict(int)
+
+def q_learning_thermal(rng, env, n_episodes=2000, max_moves=10,
+                        initial_eps=1.0, final_eps=0.05, decay_rate=0.99,
+                        alpha=0.5, gamma=0.9, q_table=None):
+
+
+    if q_table is None:
+        q_table = defaultdict(lambda: np.zeros(len(env.get_all_actions())))
+    else:
+        q_table = defaultdict(lambda: np.zeros(len(env.get_all_actions())), q_table)
+        print("Se usa la tabla ingresada en el parametro")
+
+    q_tables_by_episode = []
+    rewards_per_episode = []
+    td_errors_per_episode = []
+    eps_per_episode = []
+
+    for epi in range(n_episodes):
+        total_reward = 0
+        total_td_error = []
+        #eps debe ir cayendo
+        eps = max(final_eps, initial_eps * (decay_rate ** epi)) #print a la parte de explorar y explotar y un contador
+        eps_per_episode.append(eps)
+        #explorar bastante y explotar lo que ya se tiene grabado
+        #estudiar bien esta función max(final_eps, initial_eps * (decay_rate ** epi))
+        #10000 episodios para ver que sale
+
+        ##### Inicializar S ##############################
+        state = env.reset()
+
+        ##### Repetir para cada paso del episodio ##############################
+        for _ in range(max_moves): #Pasos del episodio si nada sale bien poner 20
+
+        ##### Escoger A de S usando la política e-greedy ##############################
+            actions = env.get_actions(state)
+            if rng.random() < eps: #explorar
+                action = rng.choice(actions)
+            else: #explotar
+                q_values = q_table[state]
+                action = actions[np.argmax([q_values[a] for a in actions])]
+
+        ##### Tomar una acción A y observar S' y R (estado siguiente y recompensa) ##############################
+            next_state, reward = env.step(state, action)
+            total_reward += reward
+
+
+        ##### Actualizar tabla Q ##############################
+            # Q-learning update
+            next_actions = env.get_actions(next_state) #
+            max_next_q = max([q_table[next_state][a] for a in next_actions]) if next_actions else 0
+
+            td = reward + gamma * max_next_q - q_table[state][action]
+            #print(td)
+
+            #SARSA: reward + gamma * next_q - q_table[state][action]
+            q_table[state][action] += alpha * td
+        ##### S <- S' ##############################
+            state = next_state
+            total_td_error.append(abs(td))
+
+
+        # Guardar copia para analizar evolución
+        q_tables_by_episode.append(q_table.copy())
+        rewards_per_episode.append(total_reward)
+        td_errors_per_episode.append(statistics.mean(total_td_error))
+
+    # Derivar la política final
+    pi = {state: np.argmax(q_table[state]) for state in q_table}
+
+
+
+    ################## Fuera del aprendizaje (luego borrar este bloque) ###############################
+    plt.figure()
+    plt.plot(eps_per_episode)
+    plt.title("e - greedy")
+    plt.xlabel("Episodio")
+    plt.ylabel("EPS")
+    plt.grid(True)
+    plt.show()
+
+
+    ################## Fin de la gráfica de eps #######################################################
+
+    return pi, q_table, q_tables_by_episode, rewards_per_episode, td_errors_per_episode
