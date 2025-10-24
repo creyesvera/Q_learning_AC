@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import zipfile
 import io
-from df_features_builder import build_df_features
+from src.data_preprocessing import build_df_features
 
 def validate_horario(file):
     # Custom validation for Horario
@@ -334,9 +334,9 @@ if st.button("Procesar archivos"):
     st.dataframe(df_features_preview)
 
     # Realizar predicción e interpretación inmediatamente después de procesar archivos
-    from prediction import using_trained_model
+    from prediction import using_trained_model,train_q_learning
     try:
-        pred_result = using_trained_model(df_features_preview)
+        pred_result = train_q_learning(df_features_preview)
         st.subheader("Resultado de la predicción")
         st.dataframe(pred_result)
 

@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
-from q_learning import ACTIONS, ThermalEnv, q_learning_thermal
-
+#from q_learning import ACTIONS, ThermalEnv, q_learning_thermal
+from src.environment import ACTIONS, ThermalEnv
+from src.agent import q_learning_thermal
 
 
 
@@ -11,8 +12,8 @@ def train_q_learning(
     max_moves=10,
     initial_eps=1.0,
     final_eps=0.05,
-    decay_rate=0.9995,
-    alpha=0.01,
+    decay_rate=0.99,
+    alpha=0.5,
     gamma=0.9
 ):
     """
@@ -39,14 +40,14 @@ def train_q_learning(
         'temp_externa_discretizada',
         'estado del aire'
     ]].apply(tuple, axis=1)
-    print(df_features.head())
+    #print(df_features.head())
     unique_states = df_features['state'].unique()
     n_actions = len(ACTIONS)
     initial_q_table = {
         state: [0.0 for _ in range(n_actions)]
         for state in unique_states
     }
-    print(initial_q_table)
+    #print(initial_q_table)
     rng = np.random.default_rng(seed=42)
     env = ThermalEnv()
     pi, q_table, q_tables_by_episode, rewards, td_errors_per_episode = q_learning_thermal(
@@ -60,26 +61,46 @@ def train_q_learning(
         gamma=gamma,
         q_table=initial_q_table
     )
-    print('Learned policy:', pi)
-    print('Final Q-table:', q_table)
-    return pi, q_table
+    print("✅ Política aprendida (estado → acción óptima):\n")
+    for s, a in list(pi.items())[:20]:  # muestra solo los primeros 20
+        print(f"{s} → {ACTIONS[a]}")
+
+
+    data = []
+    for state, action in pi.items():
+        data.append({
+            'temp_interna_discretizada': state[0],
+            'n_personas': state[1],
+            'ubicacion': state[2],
+            'opinion_termica': state[3],
+            'clases a continuación': state[4],
+            'temp_externa_discretizada': state[5],
+            'estado_aire': state[6],
+            'accion_recomendada': ACTIONS[action]  # traducir acción
+        })
+
+    pi_df = pd.DataFrame(data)
+
+
+
+    return pi_df
 
 
 
 
-def using_trained_model(df_features, q_table_path="q_table.npy"):
+def using_trained_model(df_features):
     """
     Loads a trained Q-table and predicts recommended actions for each row in df_features.
     Assumes ThermalEnv has a method encode_state_from_row(fila) that returns the state tuple.
     """
-    import numpy as np
-    from q_learning import ACTIONS, ThermalEnv
+    
 
 
     import pandas as pd
 
     # Cargar política aprendida
     df_policy = pd.read_csv("learned_policy_with_interpretation.csv")
+
 
     # Convertir 'State' a tupla de enteros
     def parse_state(s):
@@ -125,3 +146,5 @@ def using_trained_model(df_features, q_table_path="q_table.npy"):
 
 
     return df_features
+
+
